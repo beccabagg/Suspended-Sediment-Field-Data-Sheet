@@ -31,7 +31,7 @@ stage_options <- c(
   "Peak"
 )
 
-# Sampling methods (removed EDI options)
+# Sampling methods
 sampling_methods <- c(
   "EWI Iso",
   "EWI Non-Iso",
@@ -43,139 +43,102 @@ sampling_methods <- c(
   "Box Single"
 )
 
-# Create a user guide HTML
+# User Guide
 user_guide_html <- HTML('
 <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 5px solid #4682B4;">
   <h4 style="color: #4682B4;"><i class="fa fa-info-circle"></i> User Guide: Suspended Sediment Field Data Sheet</h4>
-
   <p><strong>Purpose:</strong> This application helps you document suspended sediment sampling activities in the field and generates properly formatted reports.</p>
-
-  <div style="margin-left: 15px;">
-    <p><strong>Important Notes:</strong></p>
-    <ol>
-      <li><strong>Channel Information:</strong> Enter the left and right edge measurements - the channel width will be calculated automatically.</li>
-      <li><strong>Sampling Methods:</strong> Select one or more sampling methods. Each method will have its own panel for data entry.</li>
-      <li><strong>The output excel file is editable.</strong></li>
-      <li><strong>Actions:</strong>
-        <ul>
-          <li><span style="color: #337ab7;"><strong>Save Data</strong></span> - Saves the current form data to memory (visible in the Saved Data section)</li>
-          <li><span style="color: #5cb85c;"><strong>Download Excel</strong></span> - Generates a formatted Excel file containing all entered information</li>
-          <li><span style="color: #f0ad4e;"><strong>Clear Form</strong></span> - Resets all form fields to start over</li>
-        </ul>
-      </li>
-    </ol>
-  </div>
+  <p><strong>How to Use:</strong></p>
+  <ul>
+    <li>Enter station details, measurement type, and stage conditions.</li>
+    <li>Select and configure sampling methods (e.g., EWI, Grab).</li>
+    <li>Generate a formatted Excel report with average times and sampler types.</li>
+  </ul>
+</div>
 ')
 
 # UI definition
 ui <- fluidPage(
   theme = shinythemes::shinytheme("flatly"),
-  tags$head(
-    tags$link(rel = "stylesheet", href = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css")
-  ),
-  
+  tags$head(tags$link(rel = "stylesheet", href = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css")),
   titlePanel("Suspended Sediment Field Data Sheet"),
   
   # User Guide Section
   fluidRow(
-    column(12,
-           wellPanel(
-             tags$a(
-               id = "toggle_guide",
-               class = "btn btn-info btn-sm pull-right",
-               href = "#",
-               style = "margin-top: -5px;",
-               HTML('<i class="fa fa-question-circle"></i> Toggle User Guide')
-             ),
-             tags$div(id = "user_guide", user_guide_html)
-           )
-    )
+    column(12, wellPanel(
+      tags$a(
+        id = "toggle_guide",
+        class = "btn btn-info btn-sm pull-right",
+        href = "#",
+        style = "margin-top: -5px;",
+        HTML('<i class="fa fa-question-circle"></i> Toggle User Guide')
+      ),
+      tags$div(id = "user_guide", user_guide_html)
+    ))
   ),
   
+  # Station Information
   fluidRow(
-    column(6,
-           wellPanel(
-             h4("Station Information"),
-             textInput("station_number", "Station Number:", ""),
-             dateInput("date", "Date:", Sys.Date()),
-             textInput("station_name", "Station Name:", ""),
-             textInput("party", "Party:", ""),
-             numericInput("water_temp", "Water Temperature (°C):", value = NA, min = -10, max = 50, step = 0.1)
-           )
-    )
+    column(6, wellPanel(
+      h4("Station Information"),
+      textInput("station_number", "Station Number:", ""),
+      dateInput("date", "Date:", Sys.Date()),
+      textInput("station_name", "Station Name:", ""),
+      textInput("party", "Party:", ""),
+      numericInput("water_temp", "Water Temperature (°C):", value = NA, min = -10, max = 50, step = 0.1)
+    ))
   ),
   
+  # Channel Information
   fluidRow(
-    column(12,
-           wellPanel(
-             h4("Channel Information"),
-             fluidRow(
-               column(4,
-                      numericInput("left_edge", "Sediment Channel Left Edge of Water (ft):", value = 0, step = 0.1)
-               ),
-               column(4,
-                      numericInput("right_edge", "Sediment Channel Right Edge of Water (ft):", value = 0, step = 0.1)
-               ),
-               column(4,
-                      div(
-                        style = "margin-top: 25px;",
-                        textOutput("channel_width")
-                      )
-               )
-             )
-           )
-    )
+    column(12, wellPanel(
+      h4("Channel Information"),
+      fluidRow(
+        column(4, numericInput("left_edge", "Sediment Channel Left Edge of Water (ft):", value = 0, step = 0.1)),
+        column(4, numericInput("right_edge", "Sediment Channel Right Edge of Water (ft):", value = 0, step = 0.1)),
+        column(4, div(style = "margin-top: 25px;", textOutput("channel_width")))
+      )
+    ))
   ),
   
+  # Sampling Methods
   fluidRow(
-    column(12,
-           wellPanel(
-             h4("Sampling Methods"),
-             checkboxGroupInput("selected_methods", "Select Sampling Methods:",
-                                choices = sampling_methods,
-                                selected = "EWI Iso"),
-             hr(),
-             
-             # Container for method-specific panels (will be filled dynamically)
-             uiOutput("method_panels")
-           )
-    )
+    column(12, wellPanel(
+      h4("Sampling Methods"),
+      checkboxGroupInput("selected_methods", "Select Sampling Methods:", choices = sampling_methods, selected = "EWI Iso"),
+      hr(),
+      uiOutput("method_panels")
+    ))
   ),
   
+  # Equipment Information
   fluidRow(
-    column(12,
-           wellPanel(
-             h4("Equipment Information"),
-             selectInput("sampler_type", "Sampler Type:", sampler_types),
-             conditionalPanel(
-               condition = "input.sampler_type == 'Other'",
-               textAreaInput("other_sampler", "Please explain other sampler:", rows = 3)
-             )
-           )
-    )
+    column(12, wellPanel(
+      h4("Equipment Information"),
+      selectInput("sampler_type", "Sampler Type:", sampler_types),
+      conditionalPanel(
+        condition = "input.sampler_type == 'Other'",
+        textAreaInput("other_sampler", "Please explain other sampler:", rows = 3)
+      )
+    ))
   ),
   
+  # Actions: Save, Download, Clear
   fluidRow(
-    column(12,
-           wellPanel(
-             actionButton("save_btn", "Save Data", icon = icon("save"),
-                          class = "btn-primary", width = "48%"),
-             downloadButton("download_excel", "Download Excel",
-                            class = "btn-success", style = "width:48%; float:right;"),
-             br(), br(),
-             actionButton("clear_btn", "Clear Form", icon = icon("eraser"),
-                          class = "btn-warning", width = "100%")
-           )
-    )
+    column(12, wellPanel(
+      actionButton("save_btn", "Save Data", icon = icon("save"), class = "btn-primary", width = "48%"),
+      downloadButton("download_excel", "Download Excel", class = "btn-success", style = "width:48%; float:right;"),
+      br(), br(),
+      actionButton("clear_btn", "Clear Form", icon = icon("eraser"), class = "btn-warning", width = "100%")
+    ))
   ),
   
+  # Saved Data Section
   fluidRow(
-    column(12,
-           wellPanel(
-             h4("Saved Data"),
-             verbatimTextOutput("data_output")
-           )
-    )
+    column(12, wellPanel(
+      h4("Saved Data"),
+      verbatimTextOutput("data_output")
+    ))
   )
 )
 
@@ -186,40 +149,72 @@ server <- function(input, output, session) {
     shinyjs::toggle("user_guide")
   })
   
-  # Create reactive values to store saved entries
+  # Reactive values for saved data
   saved_data <- reactiveVal(data.frame())
   current_record <- reactiveVal(NULL)
   
-  # Calculate channel width
+  # Channel width calculation
   channel_width <- reactive({
     abs(input$right_edge - input$left_edge)
   })
-  
-  # Display channel width
   output$channel_width <- renderText({
     paste("Channel Width:", channel_width(), "ft")
   })
   
-  # Dynamic method panels
+  # Dynamic UI for sampling methods
   output$method_panels <- renderUI({
     req(input$selected_methods)
     
-    # Add your sampling method panels here
-    tagList()
+    lapply(input$selected_methods, function(method) {
+      method_id <- gsub(" ", "_", tolower(method))
+      
+      if (method == "Grab") {
+        tagList(
+          h4("Grab Sampling"),
+          fluidRow(
+            column(4, textInput(paste0(method_id, "_start_time_a"), "Start Time (A):")),
+            column(4, textInput(paste0(method_id, "_end_time_a"), "End Time (A):")),
+            column(4, selectInput(paste0(method_id, "_sampler_a"), "Sampler Type (A):", sampler_types))
+          ),
+          fluidRow(
+            column(4, textInput(paste0(method_id, "_start_time_b"), "Start Time (B):")),
+            column(4, textInput(paste0(method_id, "_end_time_b"), "End Time (B):")),
+            column(4, selectInput(paste0(method_id, "_sampler_b"), "Sampler Type (B):", sampler_types))
+          )
+        )
+      } else if (method %in% c("EWI Iso", "EWI Non-Iso")) {
+        tagList(
+          h4(paste(method, "Sampling")),
+          lapply(c("A", "B", "C", "D"), function(set) {
+            fluidRow(
+              column(3, numericInput(paste0(method_id, "_num_verticals_", tolower(set)), paste("Number of Verticals (", set, "):", sep = ""), value = 10, min = 1, max = 40)),
+              column(3, textInput(paste0(method_id, "_start_time_", tolower(set)), paste("Start Time (", set, "):", sep = ""))),
+              column(3, textInput(paste0(method_id, "_end_time_", tolower(set)), paste("End Time (", set, "):", sep = ""))),
+              column(3, selectInput(paste0(method_id, "_sampler_", tolower(set)), paste("Sampler Type (", set, "):", sep = ""), sampler_types))
+            )
+          })
+        )
+      }
+    })
   })
   
-  # Display saved data
-  output$data_output <- renderPrint({
-    if(nrow(saved_data()) > 0) {
-      saved_data()
-    } else {
-      "No data saved yet."
+  # Save button action
+  observeEvent(input$save_btn, {
+    # Save logic
+  })
+  
+  # Generate Excel file
+  output$download_excel <- downloadHandler(
+    filename = function() {
+      paste0("Suspended_Sediment_Data_", Sys.Date(), ".xlsx")
+    },
+    content = function(file) {
+      # Excel generation logic
     }
-  })
+  )
   
-  # Clear form button action
+  # Clear form
   observeEvent(input$clear_btn, {
-    # Reset all inputs (base values)
     updateTextInput(session, "station_number", value = "")
     updateDateInput(session, "date", value = Sys.Date())
     updateTextInput(session, "station_name", value = "")
@@ -233,5 +228,5 @@ server <- function(input, output, session) {
   })
 }
 
-# Run the application
+# Run the Shiny app
 shinyApp(ui = ui, server = server)
