@@ -57,11 +57,19 @@ sampling_methods <- c(
 user_guide_html <- HTML('
 <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 5px solid #4682B4;">
   <h4 style="color: #4682B4;"><i class="fa fa-info-circle"></i> User Guide: Suspended Sediment Field Data Sheet</h4>
+
+  <p><strong>Purpose:</strong> This application helps you document suspended sediment sampling activities in the field and generates properly formatted reports.</p>
+
   <div style="margin-left: 15px;">
-    <p><strong>Notes:</strong></p>
+    <p><strong>How to Use This App:</strong></p>
     <ol>
+      <li><strong>Station Information:</strong> Enter basic station details including number, name, date, and water temperature.</li>
+      <li><strong>Measurement Information:</strong> Select the measurement type (wading, bridge, etc.) and document stage conditions.</li>
+      <li><strong>Channel Information:</strong> Enter the left and right edge measurements - the channel width will be calculated automatically.</li>
       <li><strong>Sampling Methods:</strong> Select one or more sampling methods. Each method will have its own panel for data entry.</li>
       <li><strong>EWI Sampling:</strong> For EWI sampling, you can enter data up to 3 sets (A, B, C) at the same section widths.</li>
+      <li><strong>Times:</strong> Record start and end times for each sampling method or set. Average time will be calculated automatically.</li>
+      <li><strong>Equipment Information:</strong> Select the sampler type used during collection.</li>
       <li><strong>Actions:</strong>
         <ul>
           <li><span style="color: #337ab7;"><strong>Save Data</strong></span> - Saves the current form data to memory (visible in the Saved Data section)</li>
@@ -71,6 +79,21 @@ user_guide_html <- HTML('
       </li>
     </ol>
   </div>
+
+  <p><strong>Sampling Method Details:</strong></p>
+  <ul style="font-size: 0.9em;">
+    <li><strong>EWI Iso</strong> - Equal Width Increment with isokinetic sampling - divides channel into equal widths</li>
+    <li><strong>EWI Non-Iso</strong> - Equal Width Increment with non-isokinetic equipment</li>
+    <li><strong>Single Vertical</strong> - Sample collected at one representative location</li>
+    <li><strong>Multi-Vertical</strong> - Samples at multiple selected points across the channel</li>
+    <li><strong>Point</strong> - Sample at specific fixed point</li>
+    <li><strong>Grab</strong> - Simple grab sample from surface or specific depth</li>
+    <li><strong>ISCO</strong> - Automated sampling</li>
+    <li><strong>Box Single</strong> - Box sampler at a single location</li>
+  </ul>
+
+  <p><small>Note: Required fields will be highlighted if left blank. For best results, complete all relevant sections before generating an Excel report.</small></p>
+</div>
 ')
 
 # UI definition
@@ -107,6 +130,22 @@ ui <- fluidPage(
              textInput("station_name", "Station Name:", ""),
              textInput("party", "Party:", ""),
              numericInput("water_temp", "Water Temperature (°C):", value = NA, min = -10, max = 50, step = 0.1)
+           )
+    ),
+
+    column(6,
+           wellPanel(
+             h4("Measurement Information"),
+             selectInput("measurement_type", "Measurement Type:", measurement_types),
+             radioButtons("stage", "Stage:", stage_options),
+             fluidRow(
+               column(6,
+                      numericInput("location_value", "Location (feet):", value = 0, step = 1)
+               ),
+               column(6,
+                      radioButtons("location_direction", "Direction:", c("Upstream", "Downstream"))
+               )
+             )
            )
     )
   ),
@@ -213,7 +252,7 @@ server <- function(input, output, session) {
     method_panels <- lapply(input$selected_methods, function(method) {
       method_id <- gsub(" ", "_", tolower(method))
 
-      # In the method_panels renderUI function, update the EWI methods section:
+# In the method_panels renderUI function, update the EWI methods section:
       if(method %in% c("EWI Iso", "EWI Non-Iso")) {
         # EWI methods with A, B, and C sets
         tagList(
@@ -469,84 +508,244 @@ server <- function(input, output, session) {
             })
           })
 
-            # Calculate average time
-            observeEvent(c(input[[start_time_id]], input[[end_time_id]]), {
-              start_time <- input[[start_time_id]]
-              end_time <- input[[end_time_id]]
+          # Calculate average time
+          observeEvent(c(input[[paste0(local_method_id, "_start_time_b")]], input[[paste0(local_method_id, "_end_time_b")]]), {
+            start_time <- input[[paste0(local_method_id, "_start_time_b")]]
+            end_time <- input[[paste0(local_method_id, "_end_time_b")]]
 
-              # Only calculate if both times are provided
-              if(start_time != "" && end_time != "") {
-                # Try to parse times
-                tryCatch({
-                  start <- as.POSIXct(start_time, format = "%H:%M")
-                  end <- as.POSIXct(end_time, format = "%H:%M")
+            # Only calculate if both times are provided
+            if(start_time != "" && end_time != "") {
+              # Try to parse times
+              tryCatch({
+                start <- as.POSIXct(start_time, format = "%H:%M")
+                end <- as.POSIXct(end_time, format = "%H:%M")
 
-                  # Calculate average time
-                  avg_time <- start + (difftime(end, start) / 2)
-                  avg_time_str <- format(avg_time, "%H:%M")
+                # Calculate average time
+                avg_time <- start + (difftime(end, start) / 2)
+                avg_time_str <- format(avg_time, "%H:%M")
 
-                  # Update average time text
-                  output[[avg_time_id]] <- renderText({
-                    paste("Average Time:", avg_time_str)
-                  })
-                }, error = function(e) {
-                  output[[avg_time_id]] <- renderText({
-                    "Average Time: (Invalid time format. Use HH:MM)"
-                  })
+                # Update average time text
+                output[[paste0(local_method_id, "_avg_time_b")]] <- renderText({
+                  paste("Average Time:", avg_time_str)
                 })
-              } else {
-                output[[avg_time_id]] <- renderText({
-                  "Average Time: (Enter both start and end times)"
+              }, error = function(e) {
+                output[[paste0(local_method_id, "_avg_time_b")]] <- renderText({
+                  "Average Time: (Invalid time format. Use HH:MM)"
                 })
-              }
-            })
-          }
+              })
+            } else {
+              output[[paste0(local_method_id, "_avg_time_b")]] <- renderText({
+                "Average Time: (Enter both start and end times)"
+              })
+            }
+          })
         })
-      } else if(method == "Grab") {
-        # For Grab method with sets A and B
+        # For Set C (new)
         local({
           local_method <- method
           local_method_id <- method_id
 
-          sets <- c("a", "b")
+          # Create reactive for this specific method's num_verticals
+          num_verticals_id_a <- paste0(local_method_id, "_num_verticals_a")
+          num_verticals_id_c <- paste0(local_method_id, "_num_verticals_c")
 
-          for(set in sets) {
-            start_time_id <- paste0(local_method_id, "_start_time_", set)
-            end_time_id <- paste0(local_method_id, "_end_time_", set)
-            avg_time_id <- paste0(local_method_id, "_avg_time_", set)
+          # Update num_verticals_c when num_verticals_a changes
+          observeEvent(input[[num_verticals_id_a]], {
+            updateNumericInput(session, num_verticals_id_c, value = input[[num_verticals_id_a]])
+          })
 
-            # Calculate average time
-            observeEvent(c(input[[start_time_id]], input[[end_time_id]]), {
-              start_time <- input[[start_time_id]]
-              end_time <- input[[end_time_id]]
+          # Update section table when num verticals or edges change
+          observeEvent(c(input[[num_verticals_id_c]], input$left_edge, input$right_edge), {
+            req(input[[num_verticals_id_c]], input$left_edge, input$right_edge)
 
-              # Only calculate if both times are provided
-              if(start_time != "" && end_time != "") {
-                # Try to parse times
-                tryCatch({
-                  start <- as.POSIXct(start_time, format = "%H:%M")
-                  end <- as.POSIXct(end_time, format = "%H:%M")
+            # Calculate sections
+            width <- channel_width()
+            num_sections <- input[[num_verticals_id_c]]
+            section_width <- width / num_sections
 
-                  # Calculate average time
-                  avg_time <- start + (difftime(end, start) / 2)
-                  avg_time_str <- format(avg_time, "%H:%M")
+            data <- data.frame(
+              Section = integer(),
+              Distance_from_LEW = numeric(),
+              Section_Width = numeric(),
+              stringsAsFactors = FALSE
+            )
 
-                  # Update average time text
-                  output[[avg_time_id]] <- renderText({
-                    paste("Average Time:", avg_time_str)
-                  })
-                }, error = function(e) {
-                  output[[avg_time_id]] <- renderText({
-                    "Average Time: (Invalid time format. Use HH:MM)"
-                  })
-                })
-              } else {
-                output[[avg_time_id]] <- renderText({
-                  "Average Time: (Enter both start and end times)"
-                })
-              }
+            for(i in 1:num_sections) {
+              section_distance <- input$left_edge + (i - 0.5) * section_width
+              data <- rbind(data, data.frame(
+                Section = i,
+                Distance_from_LEW = round(section_distance, 2),
+                Section_Width = round(section_width, 2)
+              ))
+            }
+
+            # Render the table for this specific method
+            output_id <- paste0(local_method_id, "_section_table_c")
+            output[[output_id]] <- renderDT({
+              DT::datatable(
+                data,
+                options = list(
+                  pageLength = 10,
+                  searching = FALSE,
+                  lengthChange = FALSE
+                ),
+                rownames = FALSE,
+                colnames = c("Section", "Distance from LEW (ft)", "Section Width (ft)")
+              )
             })
-          }
+          })
+
+          # Calculate average time
+          observeEvent(c(input[[paste0(local_method_id, "_start_time_c")]], input[[paste0(local_method_id, "_end_time_c")]]), {
+            start_time <- input[[paste0(local_method_id, "_start_time_c")]]
+            end_time <- input[[paste0(local_method_id, "_end_time_c")]]
+
+            # Only calculate if both times are provided
+            if(start_time != "" && end_time != "") {
+              # Try to parse times
+              tryCatch({
+                start <- as.POSIXct(start_time, format = "%H:%M")
+                end <- as.POSIXct(end_time, format = "%H:%M")
+
+                # Calculate average time
+                avg_time <- start + (difftime(end, start) / 2)
+                avg_time_str <- format(avg_time, "%H:%M")
+
+                # Update average time text
+                output[[paste0(local_method_id, "_avg_time_c")]] <- renderText({
+                  paste("Average Time:", avg_time_str)
+                })
+              }, error = function(e) {
+                output[[paste0(local_method_id, "_avg_time_c")]] <- renderText({
+                  "Average Time: (Invalid time format. Use HH:MM)"
+                })
+              })
+            } else {
+              output[[paste0(local_method_id, "_avg_time_c")]] <- renderText({
+                "Average Time: (Enter both start and end times)"
+              })
+            }
+          })
+        })
+      } else if(method == "Multi-Vertical") {
+        # For Multi-Vertical method
+        local({
+          local_method <- method
+          local_method_id <- method_id
+
+          # Create reactive for this specific method's num_verticals
+          num_verticals_id <- paste0(local_method_id, "_num_verticals")
+
+          # Update section table when num verticals or edges change
+          observeEvent(c(input[[num_verticals_id]], input$left_edge, input$right_edge), {
+            req(input[[num_verticals_id]], input$left_edge, input$right_edge)
+
+            # Calculate sections
+            width <- channel_width()
+            num_sections <- input[[num_verticals_id]]
+            section_width <- width / num_sections
+
+            data <- data.frame(
+              Section = integer(),
+              Distance_from_LEW = numeric(),
+              Section_Width = numeric(),
+              stringsAsFactors = FALSE
+            )
+
+            for(i in 1:num_sections) {
+              section_distance <- input$left_edge + i * section_width
+              data <- rbind(data, data.frame(
+                Section = i,
+                Distance_from_LEW = round(section_distance, 2),
+                Section_Width = NA  # User would define this
+              ))
+            }
+
+            # Render the table for this specific method
+            output_id <- paste0(local_method_id, "_section_table")
+            output[[output_id]] <- renderDT({
+              DT::datatable(
+                data,
+                options = list(
+                  pageLength = 10,
+                  searching = FALSE,
+                  lengthChange = FALSE
+                ),
+                rownames = FALSE,
+                colnames = c("Section", "Distance from LEW (ft)", "Section Width (ft)")
+              )
+            })
+          })
+
+          # Calculate average time
+          observeEvent(c(input[[paste0(local_method_id, "_start_time")]], input[[paste0(local_method_id, "_end_time")]]), {
+            start_time <- input[[paste0(local_method_id, "_start_time")]]
+            end_time <- input[[paste0(local_method_id, "_end_time")]]
+
+            # Only calculate if both times are provided
+            if(start_time != "" && end_time != "") {
+              # Try to parse times
+              tryCatch({
+                start <- as.POSIXct(start_time, format = "%H:%M")
+                end <- as.POSIXct(end_time, format = "%H:%M")
+
+                # Calculate average time
+                avg_time <- start + (difftime(end, start) / 2)
+                avg_time_str <- format(avg_time, "%H:%M")
+
+                # Update average time text
+                output[[paste0(local_method_id, "_avg_time")]] <- renderText({
+                  paste("Average Time:", avg_time_str)
+                })
+              }, error = function(e) {
+                output[[paste0(local_method_id, "_avg_time")]] <- renderText({
+                  "Average Time: (Invalid time format. Use HH:MM)"
+                })
+              })
+            } else {
+              output[[paste0(local_method_id, "_avg_time")]] <- renderText({
+                "Average Time: (Enter both start and end times)"
+              })
+            }
+          })
+        })
+      } else if(method %in% c("Single Vertical", "Point", "Grab", "ISCO", "Box Single")) {
+        # For single point methods
+        local({
+          local_method <- method
+          local_method_id <- method_id
+
+          # Calculate average time
+          observeEvent(c(input[[paste0(local_method_id, "_start_time")]], input[[paste0(local_method_id, "_end_time")]]), {
+            start_time <- input[[paste0(local_method_id, "_start_time")]]
+            end_time <- input[[paste0(local_method_id, "_end_time")]]
+
+            # Only calculate if both times are provided
+            if(start_time != "" && end_time != "") {
+              # Try to parse times
+              tryCatch({
+                start <- as.POSIXct(start_time, format = "%H:%M")
+                end <- as.POSIXct(end_time, format = "%H:%M")
+
+                # Calculate average time
+                avg_time <- start + (difftime(end, start) / 2)
+                avg_time_str <- format(avg_time, "%H:%M")
+
+                # Update average time text
+                output[[paste0(local_method_id, "_avg_time")]] <- renderText({
+                  paste("Average Time:", avg_time_str)
+                })
+              }, error = function(e) {
+                output[[paste0(local_method_id, "_avg_time")]] <- renderText({
+                  "Average Time: (Invalid time format. Use HH:MM)"
+                })
+              })
+            } else {
+              output[[paste0(local_method_id, "_avg_time")]] <- renderText({
+                "Average Time: (Enter both start and end times)"
+              })
+            }
+          })
         })
       }
     }
@@ -570,42 +769,81 @@ server <- function(input, output, session) {
     for(method in input$selected_methods) {
       method_id <- gsub(" ", "_", tolower(method))
 
+# In the gather_method_data function, update the EWI methods section:
       if(method %in% c("EWI Iso", "EWI Non-Iso")) {
-        # EWI methods with A, B, C, and D sets
+        # EWI methods with A, B, and C sets
         section_data_a <- NULL
         section_data_b <- NULL
-        section_data_c <- NULL
-        section_data_d <- NULL
+        section_data_c <- NULL  # Add this for Set C
 
         # Get section data if available
-        for(set in c("a", "b", "c", "d")) {
-          num_verticals_id <- paste0(method_id, "_num_verticals_", set)
-          start_time_id <- paste0(method_id, "_start_time_", set)
-          end_time_id <- paste0(method_id, "_end_time_", set)
-          sampler_id <- paste0(method_id, "_sampler_", set)
+        if(!is.null(input[[paste0(method_id, "_num_verticals_a")]])) {
+          # Calculate sections for set A
+          width <- channel_width()
+          num_sections <- input[[paste0(method_id, "_num_verticals_a")]]
+          section_width <- width / num_sections
 
-          if(!is.null(input[[num_verticals_id]])) {
-            width <- channel_width()
-            num_sections <- input[[num_verticals_id]]
-            section_width <- width / num_sections
+          section_data_a <- data.frame(
+            Section = integer(),
+            Distance_from_LEW = numeric(),
+            Section_Width = numeric(),
+            stringsAsFactors = FALSE
+          )
 
-            section_data <- data.frame(
-              Section = integer(),
-              Distance_from_LEW = numeric(),
-              Section_Width = numeric(),
-              stringsAsFactors = FALSE
-            )
+          for(i in 1:num_sections) {
+            section_distance <- input$left_edge + (i - 0.5) * section_width
+            section_data_a <- rbind(section_data_a, data.frame(
+              Section = i,
+              Distance_from_LEW = round(section_distance, 2),
+              Section_Width = round(section_width, 2)
+            ))
+          }
+        }
 
-            for(i in 1:num_sections) {
-              section_distance <- input$left_edge + (i - 0.5) * section_width
-              section_data <- rbind(section_data, data.frame(
-                Section = i,
-                Distance_from_LEW = round(section_distance, 2),
-                Section_Width = round(section_width, 2)
-              ))
-            }
+        if(!is.null(input[[paste0(method_id, "_num_verticals_b")]])) {
+          # Calculate sections for set B
+          width <- channel_width()
+          num_sections <- input[[paste0(method_id, "_num_verticals_b")]]
+          section_width <- width / num_sections
 
-            assign(paste0("section_data_", set), section_data)
+          section_data_b <- data.frame(
+            Section = integer(),
+            Distance_from_LEW = numeric(),
+            Section_Width = numeric(),
+            stringsAsFactors = FALSE
+          )
+
+          for(i in 1:num_sections) {
+            section_distance <- input$left_edge + (i - 0.5) * section_width
+            section_data_b <- rbind(section_data_b, data.frame(
+              Section = i,
+              Distance_from_LEW = round(section_distance, 2),
+              Section_Width = round(section_width, 2)
+            ))
+          }
+        }
+
+        # Add section data for Set C
+        if(!is.null(input[[paste0(method_id, "_num_verticals_c")]])) {
+          # Calculate sections for set C
+          width <- channel_width()
+          num_sections <- input[[paste0(method_id, "_num_verticals_c")]]
+          section_width <- width / num_sections
+
+          section_data_c <- data.frame(
+            Section = integer(),
+            Distance_from_LEW = numeric(),
+            Section_Width = numeric(),
+            stringsAsFactors = FALSE
+          )
+
+          for(i in 1:num_sections) {
+            section_distance <- input$left_edge + (i - 0.5) * section_width
+            section_data_c <- rbind(section_data_c, data.frame(
+              Section = i,
+              Distance_from_LEW = round(section_distance, 2),
+              Section_Width = round(section_width, 2)
+            ))
           }
         }
 
@@ -616,56 +854,77 @@ server <- function(input, output, session) {
             NumVerticals = input[[paste0(method_id, "_num_verticals_a")]],
             StartTime = input[[paste0(method_id, "_start_time_a")]],
             EndTime = input[[paste0(method_id, "_end_time_a")]],
-            Sections = section_data_a,
-            Sampler = input[[paste0(method_id, "_sampler_a")]]
+            Sections = section_data_a
           ),
           SetB = list(
             NumVerticals = input[[paste0(method_id, "_num_verticals_b")]],
             StartTime = input[[paste0(method_id, "_start_time_b")]],
             EndTime = input[[paste0(method_id, "_end_time_b")]],
-            Sections = section_data_b,
-            Sampler = input[[paste0(method_id, "_sampler_b")]]
+            Sections = section_data_b
           ),
           SetC = list(
             NumVerticals = input[[paste0(method_id, "_num_verticals_c")]],
             StartTime = input[[paste0(method_id, "_start_time_c")]],
             EndTime = input[[paste0(method_id, "_end_time_c")]],
-            Sections = section_data_c,
-            Sampler = input[[paste0(method_id, "_sampler_c")]]
-          ),
-          SetD = list(
-            NumVerticals = input[[paste0(method_id, "_num_verticals_d")]],
-            StartTime = input[[paste0(method_id, "_start_time_d")]],
-            EndTime = input[[paste0(method_id, "_end_time_d")]],
-            Sections = section_data_d,
-            Sampler = input[[paste0(method_id, "_sampler_d")]]
+            Sections = section_data_c
           )
         )
-      } else if(method == "Grab") {
-        # Grab method with A and B sets
+      } else if(method == "Multi-Vertical") {
+        # Multi-Vertical method
+        section_data <- NULL
+
+        # Get section data if available
+        if(!is.null(input[[paste0(method_id, "_num_verticals")]])) {
+          # Calculate sections
+          width <- channel_width()
+          num_sections <- input[[paste0(method_id, "_num_verticals")]]
+          section_width <- width / num_sections
+
+          section_data <- data.frame(
+            Section = integer(),
+            Distance_from_LEW = numeric(),
+            Section_Width = numeric(),
+            stringsAsFactors = FALSE
+          )
+
+          for(i in 1:num_sections) {
+            section_distance <- input$left_edge + i * section_width
+            section_data <- rbind(section_data, data.frame(
+              Section = i,
+              Distance_from_LEW = round(section_distance, 2),
+              Section_Width = NA
+            ))
+          }
+        }
+
+        # Add data for this method
         method_data_list[[method]] <- list(
           Type = method,
-          SetA = list(
-            StartTime = input[[paste0(method_id, "_start_time_a")]],
-            EndTime = input[[paste0(method_id, "_end_time_a")]],
-            Sampler = input[[paste0(method_id, "_sampler_a")]]
-          ),
-          SetB = list(
-            StartTime = input[[paste0(method_id, "_start_time_b")]],
-            EndTime = input[[paste0(method_id, "_end_time_b")]],
-            Sampler = input[[paste0(method_id, "_sampler_b")]]
-          )
+          NumVerticals = input[[paste0(method_id, "_num_verticals")]],
+          StartTime = input[[paste0(method_id, "_start_time")]],
+          EndTime = input[[paste0(method_id, "_end_time")]],
+          Sections = section_data
         )
-      } else {
-        # Other methods (Single Vertical, Multi-Vertical, Point, ISCO, Box Single)
+      } else if(method %in% c("Single Vertical", "Point")) {
+        # Single location methods
         method_data_list[[method]] <- list(
           Type = method,
           StartTime = input[[paste0(method_id, "_start_time")]],
           EndTime = input[[paste0(method_id, "_end_time")]],
-          Sampler = input[[paste0(method_id, "_sampler")]]
+          Location = input[[paste0(method_id, "_location")]],
+          Depth = input[[paste0(method_id, "_depth")]]
+        )
+      } else {
+        # Other methods (ISCO, Grab, Box Single)
+        method_data_list[[method]] <- list(
+          Type = method,
+          StartTime = input[[paste0(method_id, "_start_time")]],
+          EndTime = input[[paste0(method_id, "_end_time")]],
+          Notes = input[[paste0(method_id, "_notes")]]
         )
       }
     }
+
     return(method_data_list)
   }
 
@@ -701,37 +960,18 @@ server <- function(input, output, session) {
     return(record)
   }
 
-  # Format filename with station number, date, and methods
+  # Format filename with station number and date
   format_filename <- function() {
-    # Get station number (use "Unknown" if empty)
-    station_num <- ifelse(is.null(input$station_number) || input$station_number == "",
+    # Get station name (use "Unknown" if empty)
+    station_name <- ifelse(is.null(input$station_name) || input$station_name == "",
                           "Unknown",
-                          gsub("[^a-zA-Z0-9]", "", input$station_number)) # Remove special characters
+                          gsub("[^a-zA-Z0-9]", "", input$station_name)) # Remove special characters
 
     # Get date in YYYYMMDD format
     date_str <- format(input$date, "%Y%m%d")
 
-    # Get sampling methods and map them to simplified names for the filename
-    methods <- input$selected_methods
-    simplified_methods <- lapply(methods, function(method) {
-      # Simplify method names
-      if(grepl("EWI", method)) return("EWI")
-      if(method == "Single Vertical") return("SV")
-      if(method == "Multi-Vertical") return("MV")
-      if(method == "Point") return("Point")
-      if(method == "Grab") return("Grab")
-      if(method == "ISCO") return("ISCO")
-      if(method == "Box Single") return("Box")
-      return(gsub(" ", "", method))  # Default: remove spaces
-    })
-
-    # Join methods with underscores
-    method_str <- ifelse(length(simplified_methods) > 0,
-                         paste(simplified_methods, collapse = "_"),
-                         "NoMethod")
-
-    # Create filename: StationNumber_Date_Methods.xlsx
-    filename <- paste0(station_num, "_", date_str, "_", method_str, ".xlsx")
+    # Create filename
+    filename <- paste0("SS_", station_name, "_", date_str, ".xlsx")
 
     return(filename)
   }
@@ -885,6 +1125,24 @@ server <- function(input, output, session) {
         current_row <- current_row + 1
       }
 
+      # Measurement Information
+      current_row <- current_row + 1
+      openxlsx::writeData(wb, "Sediment Field Data", "Measurement Information", startRow = current_row, startCol = 1)
+      openxlsx::mergeCells(wb, "Sediment Field Data", rows = current_row, cols = 1:8)
+      openxlsx::addStyle(wb, "Sediment Field Data", section_style, rows = current_row, cols = 1:8)
+
+      current_row <- current_row + 1
+      fields <- c("Measurement Type", "Stage", "Location")
+      values <- c(record$Measurement_Type, record$Stage, record$Location)
+
+      for(i in 1:length(fields)) {
+        openxlsx::writeData(wb, "Sediment Field Data", fields[i], startRow = current_row, startCol = 1)
+        openxlsx::writeData(wb, "Sediment Field Data", values[i], startRow = current_row, startCol = 2)
+        openxlsx::addStyle(wb, "Sediment Field Data", field_style, rows = current_row, cols = 1)
+        openxlsx::addStyle(wb, "Sediment Field Data", value_style, rows = current_row, cols = 2)
+        current_row <- current_row + 1
+      }
+
       # Channel Information
       current_row <- current_row + 1
       openxlsx::writeData(wb, "Sediment Field Data", "Channel Information", startRow = current_row, startCol = 1)
@@ -928,97 +1186,259 @@ server <- function(input, output, session) {
           openxlsx::addStyle(wb, "Sediment Field Data", section_style, rows = current_row, cols = 1:8)
 
           if(method_name %in% c("EWI Iso", "EWI Non-Iso")) {
-            # For EWI methods with A, B, C, and D sets
+            # For EWI methods with A and B sets
 
-            for(set in c("A", "B", "C", "D")) {
+            # Set A
+            current_row <- current_row + 1
+            openxlsx::writeData(wb, "Sediment Field Data", "Set A", startRow = current_row, startCol = 1)
+            openxlsx::mergeCells(wb, "Sediment Field Data", rows = current_row, cols = 1:8)
+
+            current_row <- current_row + 1
+            fields <- c("Number of Verticals", "Start Time", "End Time")
+            values <- c(
+              method_data$SetA$NumVerticals,
+              method_data$SetA$StartTime,
+              method_data$SetA$EndTime
+            )
+
+            for(i in 1:length(fields)) {
+              openxlsx::writeData(wb, "Sediment Field Data", fields[i], startRow = current_row, startCol = 1)
+              openxlsx::writeData(wb, "Sediment Field Data", values[i], startRow = current_row, startCol = 2)
+              openxlsx::addStyle(wb, "Sediment Field Data", field_style, rows = current_row, cols = 1)
+              openxlsx::addStyle(wb, "Sediment Field Data", value_style, rows = current_row, cols = 2)
               current_row <- current_row + 1
-              openxlsx::writeData(wb, "Sediment Field Data", paste("Set", set), startRow = current_row, startCol = 1)
+            }
+
+            # Table of sections for Set A
+            if(!is.null(method_data$SetA$Sections) && nrow(method_data$SetA$Sections) > 0) {
+              current_row <- current_row + 1
+              openxlsx::writeData(wb, "Sediment Field Data", "Sampling Sections - Set A", startRow = current_row, startCol = 1)
               openxlsx::mergeCells(wb, "Sediment Field Data", rows = current_row, cols = 1:8)
 
               current_row <- current_row + 1
-              fields <- c("Number of Verticals", "Start Time", "End Time", "Sampler Type")
-              values <- c(
-                method_data[[paste0("Set", set)]]$NumVerticals,
-                method_data[[paste0("Set", set)]]$StartTime,
-                method_data[[paste0("Set", set)]]$EndTime,
-                method_data[[paste0("Set", set)]]$Sampler
-              )
-
-              for(i in 1:length(fields)) {
-                openxlsx::writeData(wb, "Sediment Field Data", fields[i], startRow = current_row, startCol = 1)
-                openxlsx::writeData(wb, "Sediment Field Data", values[i], startRow = current_row, startCol = 2)
-                openxlsx::addStyle(wb, "Sediment Field Data", field_style, rows = current_row, cols = 1)
-                openxlsx::addStyle(wb, "Sediment Field Data", value_style, rows = current_row, cols = 2)
-                current_row <- current_row + 1
+              table_headers <- c("Section", "Distance from LEW (ft)", "Section Width (ft)")
+              openxlsx::writeData(wb, "Sediment Field Data", table_headers, startRow = current_row, startCol = 1, colNames = FALSE)
+              for(j in 1:length(table_headers)) {
+                openxlsx::addStyle(wb, "Sediment Field Data", table_header_style, rows = current_row, cols = j)
               }
 
-              # Table of sections for each set
-              if(!is.null(method_data[[paste0("Set", set)]]$Sections) && nrow(method_data[[paste0("Set", set)]]$Sections) > 0) {
+              # Write section data with alternating row colors
+              for(i in 1:nrow(method_data$SetA$Sections)) {
                 current_row <- current_row + 1
-                openxlsx::writeData(wb, "Sediment Field Data", paste("Sampling Sections - Set", set), startRow = current_row, startCol = 1)
-                openxlsx::mergeCells(wb, "Sediment Field Data", rows = current_row, cols = 1:8)
+                row_data <- c(
+                  method_data$SetA$Sections$Section[i],
+                  method_data$SetA$Sections$Distance_from_LEW[i],
+                  method_data$SetA$Sections$Section_Width[i]
+                )
+                openxlsx::writeData(wb, "Sediment Field Data", row_data, startRow = current_row, startCol = 1, colNames = FALSE)
 
-                current_row <- current_row + 1
-                table_headers <- c("Section", "Distance from LEW (ft)", "Section Width (ft)")
-                openxlsx::writeData(wb, "Sediment Field Data", table_headers, startRow = current_row, startCol = 1, colNames = FALSE)
-                for(j in 1:length(table_headers)) {
-                  openxlsx::addStyle(wb, "Sediment Field Data", table_header_style, rows = current_row, cols = j)
-                }
-
-                # Write section data with alternating row colors
-                for(i in 1:nrow(method_data[[paste0("Set", set)]]$Sections)) {
-                  current_row <- current_row + 1
-                  row_data <- c(
-                    method_data[[paste0("Set", set)]]$Sections$Section[i],
-                    method_data[[paste0("Set", set)]]$Sections$Distance_from_LEW[i],
-                    method_data[[paste0("Set", set)]]$Sections$Section_Width[i]
-                  )
-                  openxlsx::writeData(wb, "Sediment Field Data", row_data, startRow = current_row, startCol = 1, colNames = FALSE)
-
-                  # Apply alternating row styles
-                  if(i %% 2 == 0) {
-                    for(j in 1:length(row_data)) {
-                      openxlsx::addStyle(wb, "Sediment Field Data", alt_row_style, rows = current_row, cols = j)
-                    }
-                  } else {
-                    for(j in 1:length(row_data)) {
-                      openxlsx::addStyle(wb, "Sediment Field Data", table_data_style, rows = current_row, cols = j)
-                    }
+                # Apply alternating row styles
+                if(i %% 2 == 0) {
+                  for(j in 1:length(row_data)) {
+                    openxlsx::addStyle(wb, "Sediment Field Data", alt_row_style, rows = current_row, cols = j)
+                  }
+                } else {
+                  for(j in 1:length(row_data)) {
+                    openxlsx::addStyle(wb, "Sediment Field Data", table_data_style, rows = current_row, cols = j)
                   }
                 }
               }
             }
-          } else if(method_name == "Grab") {
-            # Grab method with A and B sets
-            for(set in c("A", "B")) {
+
+            # Set B
+            current_row <- current_row + 2
+            openxlsx::writeData(wb, "Sediment Field Data", "Set B", startRow = current_row, startCol = 1)
+            openxlsx::mergeCells(wb, "Sediment Field Data", rows = current_row, cols = 1:8)
+
+            current_row <- current_row + 1
+            fields <- c("Number of Verticals", "Start Time", "End Time")
+            values <- c(
+              method_data$SetB$NumVerticals,
+              method_data$SetB$StartTime,
+              method_data$SetB$EndTime
+            )
+
+            for(i in 1:length(fields)) {
+              openxlsx::writeData(wb, "Sediment Field Data", fields[i], startRow = current_row, startCol = 1)
+              openxlsx::writeData(wb, "Sediment Field Data", values[i], startRow = current_row, startCol = 2)
+              openxlsx::addStyle(wb, "Sediment Field Data", field_style, rows = current_row, cols = 1)
+              openxlsx::addStyle(wb, "Sediment Field Data", value_style, rows = current_row, cols = 2)
               current_row <- current_row + 1
-              openxlsx::writeData(wb, "Sediment Field Data", paste("Set", set), startRow = current_row, startCol = 1)
+            }
+
+            # Table of sections for Set B
+            if(!is.null(method_data$SetB$Sections) && nrow(method_data$SetB$Sections) > 0) {
+              current_row <- current_row + 1
+              openxlsx::writeData(wb, "Sediment Field Data", "Sampling Sections - Set B", startRow = current_row, startCol = 1)
               openxlsx::mergeCells(wb, "Sediment Field Data", rows = current_row, cols = 1:8)
 
               current_row <- current_row + 1
-              fields <- c("Start Time", "End Time", "Sampler Type")
-              values <- c(
-                method_data[[paste0("Set", set)]]$StartTime,
-                method_data[[paste0("Set", set)]]$EndTime,
-                method_data[[paste0("Set", set)]]$Sampler
-              )
+              table_headers <- c("Section", "Distance from LEW (ft)", "Section Width (ft)")
+              openxlsx::writeData(wb, "Sediment Field Data", table_headers, startRow = current_row, startCol = 1, colNames = FALSE)
+              for(j in 1:length(table_headers)) {
+                openxlsx::addStyle(wb, "Sediment Field Data", table_header_style, rows = current_row, cols = j)
+              }
 
-              for(i in 1:length(fields)) {
-                openxlsx::writeData(wb, "Sediment Field Data", fields[i], startRow = current_row, startCol = 1)
-                openxlsx::writeData(wb, "Sediment Field Data", values[i], startRow = current_row, startCol = 2)
-                openxlsx::addStyle(wb, "Sediment Field Data", field_style, rows = current_row, cols = 1)
-                openxlsx::addStyle(wb, "Sediment Field Data", value_style, rows = current_row, cols = 2)
+              # Write section data with alternating row colors
+              for(i in 1:nrow(method_data$SetB$Sections)) {
                 current_row <- current_row + 1
+                row_data <- c(
+                  method_data$SetB$Sections$Section[i],
+                  method_data$SetB$Sections$Distance_from_LEW[i],
+                  method_data$SetB$Sections$Section_Width[i]
+                )
+                openxlsx::writeData(wb, "Sediment Field Data", row_data, startRow = current_row, startCol = 1, colNames = FALSE)
+
+                # Apply alternating row styles
+                if(i %% 2 == 0) {
+                  for(j in 1:length(row_data)) {
+                    openxlsx::addStyle(wb, "Sediment Field Data", alt_row_style, rows = current_row, cols = j)
+                  }
+                } else {
+                  for(j in 1:length(row_data)) {
+                    openxlsx::addStyle(wb, "Sediment Field Data", table_data_style, rows = current_row, cols = j)
+                  }
+                }
               }
             }
-          } else {
-            # Other methods (Single Vertical, Multi-Vertical, Point, ISCO, Box Single)
+
+          } else if(method_name == "Multi-Vertical") {
+            # Multi-Vertical method
             current_row <- current_row + 1
-            fields <- c("Start Time", "End Time", "Sampler Type")
+            fields <- c("Number of Verticals", "Start Time", "End Time")
+            values <- c(
+              method_data$NumVerticals,
+              method_data$StartTime,
+              method_data$EndTime
+            )
+
+            for(i in 1:length(fields)) {
+              openxlsx::writeData(wb, "Sediment Field Data", fields[i], startRow = current_row, startCol = 1)
+              openxlsx::writeData(wb, "Sediment Field Data", values[i], startRow = current_row, startCol = 2)
+              openxlsx::addStyle(wb, "Sediment Field Data", field_style, rows = current_row, cols = 1)
+              openxlsx::addStyle(wb, "Sediment Field Data", value_style, rows = current_row, cols = 2)
+              current_row <- current_row + 1
+            }
+
+            # Table of sections
+            if(!is.null(method_data$Sections) && nrow(method_data$Sections) > 0) {
+              current_row <- current_row + 1
+              openxlsx::writeData(wb, "Sediment Field Data", "Sampling Sections", startRow = current_row, startCol = 1)
+              openxlsx::mergeCells(wb, "Sediment Field Data", rows = current_row, cols = 1:8)
+
+              current_row <- current_row + 1
+              table_headers <- c("Section", "Distance from LEW (ft)", "Section Width (ft)")
+              openxlsx::writeData(wb, "Sediment Field Data", table_headers, startRow = current_row, startCol = 1, colNames = FALSE)
+              for(j in 1:length(table_headers)) {
+                openxlsx::addStyle(wb, "Sediment Field Data", table_header_style, rows = current_row, cols = j)
+              }
+
+              # Write section data with alternating row colors
+              for(i in 1:nrow(method_data$Sections)) {
+                current_row <- current_row + 1
+                row_data <- c(
+                  method_data$Sections$Section[i],
+                  method_data$Sections$Distance_from_LEW[i],
+                  method_data$Sections$Section_Width[i]
+                )
+                openxlsx::writeData(wb, "Sediment Field Data", row_data, startRow = current_row, startCol = 1, colNames = FALSE)
+
+                # Apply alternating row styles
+                if(i %% 2 == 0) {
+                  for(j in 1:length(row_data)) {
+                    openxlsx::addStyle(wb, "Sediment Field Data", alt_row_style, rows = current_row, cols = j)
+                  }
+                } else {
+                  for(j in 1:length(row_data)) {
+                    openxlsx::addStyle(wb, "Sediment Field Data", table_data_style, rows = current_row, cols = j)
+                  }
+                }
+              }
+            }
+            # Set C
+            current_row <- current_row + 2
+            openxlsx::writeData(wb, "Sediment Field Data", "Set C", startRow = current_row, startCol = 1)
+            openxlsx::mergeCells(wb, "Sediment Field Data", rows = current_row, cols = 1:8)
+
+            current_row <- current_row + 1
+            fields <- c("Number of Verticals", "Start Time", "End Time")
+            values <- c(
+              method_data$SetC$NumVerticals,
+              method_data$SetC$StartTime,
+              method_data$SetC$EndTime
+            )
+
+            for(i in 1:length(fields)) {
+              openxlsx::writeData(wb, "Sediment Field Data", fields[i], startRow = current_row, startCol = 1)
+              openxlsx::writeData(wb, "Sediment Field Data", values[i], startRow = current_row, startCol = 2)
+              openxlsx::addStyle(wb, "Sediment Field Data", field_style, rows = current_row, cols = 1)
+              openxlsx::addStyle(wb, "Sediment Field Data", value_style, rows = current_row, cols = 2)
+              current_row <- current_row + 1
+            }
+
+            # Table of sections for Set C
+            if(!is.null(method_data$SetC$Sections) && nrow(method_data$SetC$Sections) > 0) {
+              current_row <- current_row + 1
+              openxlsx::writeData(wb, "Sediment Field Data", "Sampling Sections - Set C", startRow = current_row, startCol = 1)
+              openxlsx::mergeCells(wb, "Sediment Field Data", rows = current_row, cols = 1:8)
+
+              current_row <- current_row + 1
+              table_headers <- c("Section", "Distance from LEW (ft)", "Section Width (ft)")
+              openxlsx::writeData(wb, "Sediment Field Data", table_headers, startRow = current_row, startCol = 1, colNames = FALSE)
+              for(j in 1:length(table_headers)) {
+                openxlsx::addStyle(wb, "Sediment Field Data", table_header_style, rows = current_row, cols = j)
+              }
+
+              # Write section data with alternating row colors
+              for(i in 1:nrow(method_data$SetC$Sections)) {
+                current_row <- current_row + 1
+                row_data <- c(
+                  method_data$SetC$Sections$Section[i],
+                  method_data$SetC$Sections$Distance_from_LEW[i],
+                  method_data$SetC$Sections$Section_Width[i]
+                )
+                openxlsx::writeData(wb, "Sediment Field Data", row_data, startRow = current_row, startCol = 1, colNames = FALSE)
+
+                # Apply alternating row styles
+                if(i %% 2 == 0) {
+                  for(j in 1:length(row_data)) {
+                    openxlsx::addStyle(wb, "Sediment Field Data", alt_row_style, rows = current_row, cols = j)
+                  }
+                } else {
+                  for(j in 1:length(row_data)) {
+                    openxlsx::addStyle(wb, "Sediment Field Data", table_data_style, rows = current_row, cols = j)
+                  }
+                }
+              }
+            }
+
+          } else if(method_name %in% c("Single Vertical", "Point")) {
+            # Single location methods
+            current_row <- current_row + 1
+            fields <- c("Start Time", "End Time", "Location from LEW (ft)", "Depth (ft)")
             values <- c(
               method_data$StartTime,
               method_data$EndTime,
-              method_data$Sampler
+              method_data$Location,
+              method_data$Depth
+            )
+
+            for(i in 1:length(fields)) {
+              openxlsx::writeData(wb, "Sediment Field Data", fields[i], startRow = current_row, startCol = 1)
+              openxlsx::writeData(wb, "Sediment Field Data", values[i], startRow = current_row, startCol = 2)
+              openxlsx::addStyle(wb, "Sediment Field Data", field_style, rows = current_row, cols = 1)
+              openxlsx::addStyle(wb, "Sediment Field Data", value_style, rows = current_row, cols = 2)
+              current_row <- current_row + 1
+            }
+
+          } else {
+            # Other methods (ISCO, Grab, Box Single)
+            current_row <- current_row + 1
+            fields <- c("Start Time", "End Time", "Notes")
+            values <- c(
+              method_data$StartTime,
+              method_data$EndTime,
+              method_data$Notes
             )
 
             for(i in 1:length(fields)) {
@@ -1068,15 +1488,16 @@ server <- function(input, output, session) {
 
     # Method-specific inputs will be recreated when selection changes
   })
+}
 
-  # Add shinyjs dependency
-  if(!require("shinyjs", character.only = TRUE, quietly = TRUE)) {
-    install.packages("shinyjs")
-    library(shinyjs)
-  }
+# Add shinyjs dependency
+if(!require("shinyjs", character.only = TRUE, quietly = TRUE)) {
+  install.packages("shinyjs")
+  library(shinyjs)
+}
 
-  # Run the application with shinyjs enabled
-  shinyApp(ui = shinyUI(fluidPage(
-    shinyjs::useShinyjs(),
-    ui
-  )), server = server)
+# Run the application with shinyjs enabled
+shinyApp(ui = shinyUI(fluidPage(
+  shinyjs::useShinyjs(),
+  ui
+)), server = server)
